@@ -36,6 +36,8 @@ int SongEndEpoch[NEO_MAXPLAYERS+1];
 int LastPlayedSong[NEO_MAXPLAYERS+1];
 bool SdkPlayPrepared = false;
 
+float RadioVolume[NEO_MAXPLAYERS+1];
+
 ConVar UseSdkPlayback = null;
 
 public Plugin myinfo =
@@ -55,6 +57,7 @@ public void OnPluginStart()
 	
 	RegConsoleCmd("sm_radio", 	 Cmd_Radio);
 	RegConsoleCmd("sm_radiooff", Cmd_Radio);
+	RegConsoleCmd("sm_radiovol", Cmd_RadioVolume);
 	
 	UseSdkPlayback = CreateConVar("sm_radio_type", "0", "Whether to use the old console \"play ...\" style (value 0), or new SDK tools play style with volume control (value 1).", _, true, 0.0, true, 1.0);
 	HookConVarChange(UseSdkPlayback, PlayType_CvarChanged);
@@ -62,6 +65,8 @@ public void OnPluginStart()
 	if (UseSdkPlayback.BoolValue) {
 		PrepareSdkPlaySounds();
 	}
+	
+	ResetState();
 	
 	CreateTimer(5.0, Timer_NextSong, _, TIMER_REPEAT);
 }
@@ -99,6 +104,7 @@ void ResetState()
 		RadioEnabled[client] = false;
 		SongEndEpoch[client] = 0;
 		LastPlayedSong[client] = 0;
+		RadioVolume[client] = 1.0;
 	}
 }
 
@@ -107,6 +113,7 @@ public void OnClientPutInServer(int client)
 	RadioEnabled[client] = false;
 	SongEndEpoch[client] = 0;
 	LastPlayedSong[client] = 0;
+	RadioVolume[client] = 1.0;
 }
 
 public void OnClientDisconnect(int client)
@@ -114,17 +121,20 @@ public void OnClientDisconnect(int client)
 	RadioEnabled[client] = false;
 	SongEndEpoch[client] = 0;
 	LastPlayedSong[client] = 0;
+	RadioVolume[client] = 1.0;
 }
 
-void Play(int client, bool playLastSong = false, float playFromPosition = 0.0) {
+void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, bool verbose = true) {
 	if(!IsValidClient(client))
 		return;
 	
-	if (!UseSdkPlayback.BoolValue || LastPlayedSong[client] == 0) {
-		PrintToChat(client, "%s You are now listening to NEOTOKYO° radio. Type !radio again to turn it off.", RADIO_TAG);
-		
-		if (UseSdkPlayback.BoolValue) {
-			PrintToChat(client, "Type !radiovol 0-100 to control playback volume.");
+	if (verbose) {
+		if (!UseSdkPlayback.BoolValue || LastPlayedSong[client] == 0) {
+			PrintToChat(client, "%s You are now listening to NEOTOKYO° radio. Type !radio again to turn it off.", RADIO_TAG);
+			
+			if (UseSdkPlayback.BoolValue) {
+				PrintToChat(client, "Type !radiovol 0-100 to control playback volume.");
+			}
 		}
 	}
 	
@@ -143,17 +153,19 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0) {
 		}
 		
 		EmitSoundToClient(client, Playlist[Song],
-		_, _, _, _, _, _, _, _, _, _, playFromPosition);
+		_, _, _, _, RadioVolume[client], _, _, _, _, _, playFromPosition);
 		SongEndEpoch[client] = GetSongEndEpoch(Song);
 		LastPlayedSong[client] = Song;
 	} else {
 		ClientCommand(client, "play \"%s\"", Playlist[Song]);
 	}
 	
+	if (verbose) {
 #define MAX_FANCY_STRLEN 42 // longest string GetSongMetadata can reasonably produce + '\0'
-	decl String:songFancyName[MAX_FANCY_STRLEN];
-	GetSongMetadata(Song, songFancyName, MAX_FANCY_STRLEN);
-	PrintToChat(client, "%s Now playing: %s", RADIO_TAG, songFancyName);
+		decl String:songFancyName[MAX_FANCY_STRLEN];
+		GetSongMetadata(Song, songFancyName, MAX_FANCY_STRLEN);
+		PrintToChat(client, "%s Now playing: %s", RADIO_TAG, songFancyName);	
+	}
 }
 
 public Action Timer_NextSong(Handle timer)
@@ -164,9 +176,12 @@ public Action Timer_NextSong(Handle timer)
 		if (IsValidClient(client) && RadioEnabled[client]) {
 			if (timeNow > SongEndEpoch[client]) {
 				Play(client);
-			} else {
+			}
+#if(0)
+			else {
 				PrintToChat(client, "%s Song playing; won't play next song yet...", RADIO_TAG);
 			}
+#endif
 		}
 	}
 	
@@ -200,6 +215,37 @@ public Action Cmd_Radio(int client, int args)
 	}
 	else {
 		Stop(client);
+	}
+	
+	return Plugin_Handled;
+}
+
+public Action Cmd_RadioVolume(int client, int args)
+{
+	if (!UseSdkPlayback.BoolValue) {
+		ReplyToCommand(client, "%s This server uses a radio mode that doesn't support volume adjust.", RADIO_TAG);
+		return Plugin_Handled;
+	}
+	
+	if (args != 1) {
+		ReplyToCommand(client, "%s Usage: sm_radiovolume <value in range 0-100>", RADIO_TAG);
+		return Plugin_Handled;
+	}
+	
+	decl String:buffer[4];
+	if (GetCmdArg(1, buffer, sizeof(buffer)) < 1) {
+		ReplyToCommand(client, "%s Failed to parse volume. Usage: sm_radiovolume <value in range 0-100>", RADIO_TAG);
+		return Plugin_Handled;
+	}
+	
+	// Representing volume to client as 0-100 integer for intuitivity, but engine internally uses a float of 0.0-1.0.
+	int intVolume = Min(100, Max(0, StringToInt(buffer)));
+	RadioVolume[client] = intVolume / 100.0;
+	
+	ReplyToCommand(client, "%s Your radio volume level is now %i\%.", RADIO_TAG, intVolume);
+	
+	if (RadioEnabled[client]) {
+		Play(client, true, 1.0 * Max(0, SongEndEpoch[client] - GetTime()), false);	
 	}
 	
 	return Plugin_Handled;
@@ -298,6 +344,14 @@ void GetSongMetadata(int songIndex, char[] outString, int outSize)
 	if (Format(outString, outSize, "%s – %s", songTitles[songIndex], albumInfo) < 1) {
 		ThrowError("String format failed"); // throw so we never pass unallocated memory
 	}
+}
+
+int Min(int v1, int v2)
+{
+	if (v1 < v2)
+		return v1;
+	else
+		return v2;
 }
 
 int Max(int v1, int v2)
