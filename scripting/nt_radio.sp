@@ -13,6 +13,8 @@
 
 #define RADIO_TAG "[radio]"
 
+#define MAX_FANCY_STRLEN 44 // longest string GetSongMetadata can reasonably produce + '\0'
+
 new const String:Playlist[SONG_COUNT][] = {
 	"../soundtrack/101 - annul.mp3",
 	"../soundtrack/102 - tinsoldiers.mp3",
@@ -57,8 +59,16 @@ public void OnPluginStart()
 	
 	RegConsoleCmd("sm_radio", 	 Cmd_Radio);
 	RegConsoleCmd("sm_radiooff", Cmd_Radio);
+	
 	RegConsoleCmd("sm_radiovol", Cmd_RadioVolume);
+	RegConsoleCmd("sm_radiovolume", Cmd_RadioVolume);
+	
 	RegConsoleCmd("sm_radioskip", Cmd_RadioSkip);
+	
+	// More generic command aliases -- comment away if they clash with something on your server
+	RegConsoleCmd("sm_vol", Cmd_RadioVolume);
+	RegConsoleCmd("sm_volume", Cmd_RadioVolume);
+	RegConsoleCmd("sm_skip", Cmd_RadioSkip);
 	
 	UseSdkPlayback = CreateConVar("sm_radio_type", "0", "Whether to use the old console \"play ...\" style (value 0), or new SDK tools play style with volume control (value 1).", _, true, 0.0, true, 1.0);
 	HookConVarChange(UseSdkPlayback, PlayType_CvarChanged);
@@ -134,7 +144,7 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 			PrintToChat(client, "%s You are now listening to NEOTOKYO° radio. Type !radio again to turn it off.", RADIO_TAG);
 			
 			if (UseSdkPlayback.BoolValue) {
-				PrintToChat(client, "Type !radiovol 0-100 to control playback volume.");
+				PrintToChat(client, "%s !radiovol 0-100 to change volume. !radioskip to skip a song.", RADIO_TAG);
 			}
 		}
 	}
@@ -162,11 +172,32 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 	}
 	
 	if (verbose) {
-#define MAX_FANCY_STRLEN 42 // longest string GetSongMetadata can reasonably produce + '\0'
-		decl String:songFancyName[MAX_FANCY_STRLEN];
-		GetSongMetadata(Song, songFancyName, MAX_FANCY_STRLEN);
-		PrintToChat(client, "%s Now playing: %s", RADIO_TAG, songFancyName);	
+		DataPack data = CreateDataPack();
+		data.WriteCell(GetClientUserId(client));
+		data.WriteCell(Song);
+		// Delay verbose song info to avoid a hard to read wall of text in chat.
+		CreateTimer(3.0 , Timer_ShowSongDetails, data);
 	}
+	
+	if (RadioVolume[client] == 0) {
+		PrintToChat(client, "%s Your radio is muted. Type !radiovol to change volume.", RADIO_TAG);
+	}
+}
+
+public Action Timer_ShowSongDetails(Handle timer, DataPack data)
+{
+	data.Reset();
+	int client = GetClientOfUserId(data.ReadCell());
+	int song = data.ReadCell();
+	delete data;
+	
+	if (IsValidClient(client)) {
+		decl String:songFancyName[MAX_FANCY_STRLEN];
+		GetSongMetadata(song, songFancyName, MAX_FANCY_STRLEN);
+		PrintToChat(client, "%s Now playing: %s", RADIO_TAG, songFancyName);
+	}
+	
+	return Plugin_Stop;
 }
 
 public Action Timer_NextSong(Handle timer)
@@ -229,7 +260,7 @@ public Action Cmd_RadioVolume(int client, int args)
 	}
 	
 	if (args != 1) {
-		ReplyToCommand(client, "%s Usage: sm_radiovolume <value in range 0-100>", RADIO_TAG);
+		ReplyToCommand(client, "%s Usage: sm_radiovol <value in range 0-100>", RADIO_TAG);
 		return Plugin_Handled;
 	}
 	
@@ -255,12 +286,11 @@ public Action Cmd_RadioVolume(int client, int args)
 public Action Cmd_RadioSkip(int client, int args)
 {
 	if (!RadioEnabled[client]) {
-		RadioEnabled[client] = true;
+		Cmd_Radio(client, args);
+	} else {
+		ReplyToCommand(client, "%s Skipping song.", RADIO_TAG);
+		Play(client);
 	}
-	
-	ReplyToCommand("%s Skipping song.", RADIO_TAG);
-	
-	Play(client);
 	
 	return Plugin_Handled;
 }
