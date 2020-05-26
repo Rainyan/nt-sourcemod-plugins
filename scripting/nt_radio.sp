@@ -58,6 +58,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_radio", 	 Cmd_Radio);
 	RegConsoleCmd("sm_radiooff", Cmd_Radio);
 	RegConsoleCmd("sm_radiovol", Cmd_RadioVolume);
+	RegConsoleCmd("sm_radioskip", Cmd_RadioSkip);
 	
 	UseSdkPlayback = CreateConVar("sm_radio_type", "0", "Whether to use the old console \"play ...\" style (value 0), or new SDK tools play style with volume control (value 1).", _, true, 0.0, true, 1.0);
 	HookConVarChange(UseSdkPlayback, PlayType_CvarChanged);
@@ -247,6 +248,19 @@ public Action Cmd_RadioVolume(int client, int args)
 	if (RadioEnabled[client]) {
 		Play(client, true, 1.0 * Max(0, SongEndEpoch[client] - GetTime()), false);	
 	}
+	
+	return Plugin_Handled;
+}
+
+public Action Cmd_RadioSkip(int client, int args)
+{
+	if (!RadioEnabled[client]) {
+		RadioEnabled[client] = true;
+	}
+	
+	ReplyToCommand("%s Skipping song.", RADIO_TAG);
+	
+	Play(client);
 	
 	return Plugin_Handled;
 }
