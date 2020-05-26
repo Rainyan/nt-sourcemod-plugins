@@ -70,7 +70,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_volume", Cmd_RadioVolume);
 	RegConsoleCmd("sm_skip", Cmd_RadioSkip);
 	
-	UseSdkPlayback = CreateConVar("sm_radio_type", "0", "Whether to use the old console \"play ...\" style (value 0), or new SDK tools play style with volume control (value 1).", _, true, 0.0, true, 1.0);
+	UseSdkPlayback = CreateConVar("sm_radio_type", "1", "Whether to use the old console \"play ...\" style (value 0), or new SDK tools play style with volume control (value 1).", _, true, 0.0, true, 1.0);
 	HookConVarChange(UseSdkPlayback, PlayType_CvarChanged);
 	
 	if (UseSdkPlayback.BoolValue) {
