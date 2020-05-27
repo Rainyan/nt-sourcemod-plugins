@@ -161,6 +161,9 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 		
 		if (playLastSong) {
 			Song = LastPlayedSong[client];
+		} else if (Song == LastPlayedSong[client]) {
+			// Don't pick the same random song twice in a row.
+			Song = (Song + 1) % SONG_COUNT;
 		}
 		
 		EmitSoundToClient(client, Playlist[Song],
