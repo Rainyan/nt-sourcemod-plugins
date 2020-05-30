@@ -177,7 +177,7 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 		
 		EmitSoundToClient(client, Playlist[Song],
 		_, _, _, _, RadioVolume[client], _, _, _, _, _, playFromPosition);
-		SongEndEpoch[client] = GetSongEndEpoch(Song);
+		SongEndEpoch[client] = Max(0, GetSongEndEpoch(Song) - RoundToNearest(playFromPosition));
 		LastPlayedSong[client] = Song;
 	} else {
 		ClientCommand(client, "play \"%s\"", Playlist[Song]);
