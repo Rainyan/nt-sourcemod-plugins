@@ -82,6 +82,14 @@ public void OnPluginStart()
 	CreateTimer(5.0, Timer_NextSong, _, TIMER_REPEAT);
 }
 
+public void OnMapChange()
+{
+	SdkPlayPrepared = false;
+	if (UseSdkPlayback.BoolValue) {
+		PrepareSdkPlaySounds();
+	}
+}
+
 public void PlayType_CvarChanged(ConVar convar, const char[] oldVal, const char[] newVal)
 {
 	if (convar.BoolValue && !SdkPlayPrepared) {
