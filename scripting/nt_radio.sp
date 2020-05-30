@@ -144,7 +144,8 @@ public void OnClientDisconnect(int client)
 	RadioVolume[client] = DEFAULT_RADIO_VOLUME;
 }
 
-void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, bool verbose = true) {
+void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, bool verbose = true)
+{
 	if(!IsValidClient(client))
 		return;
 	
@@ -161,11 +162,10 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 	int Song = GetRandomInt(0, SONG_COUNT-1);
 	
 	if (UseSdkPlayback.BoolValue) {
-		bool resetLastPlayedSong = !playLastSong;
-		
 		// Is a previous song still playing?
 		if (GetTime() < SongEndEpoch[client]) {
-			Stop(client, resetLastPlayedSong);
+			// Don't reset if we're looking to play the same song.
+			Stop(client, !playLastSong);
 		}
 		
 		if (playLastSong) {
@@ -175,8 +175,9 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 			Song = (Song + 1) % SONG_COUNT;
 		}
 		
-		EmitSoundToClient(client, Playlist[Song],
-		_, _, _, _, RadioVolume[client], _, _, _, _, _, playFromPosition);
+		EmitSoundToClient(client, Playlist[Song], _, _, _, _,
+			RadioVolume[client], _, _, _, _, _, playFromPosition);
+		
 		SongEndEpoch[client] = Max(0, GetSongEndEpoch(Song) - RoundToCeil(playFromPosition));
 		LastPlayedSong[client] = Song;
 	} else {
@@ -184,6 +185,7 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 	}
 	
 	if (verbose) {
+		// The timer callback is responsible for freeing this memory.
 		DataPack data = CreateDataPack();
 		data.WriteCell(GetClientUserId(client));
 		data.WriteCell(Song);
@@ -200,14 +202,17 @@ public Action Timer_ShowSongDetails(Handle timer, DataPack data)
 {
 	data.Reset();
 	int client = GetClientOfUserId(data.ReadCell());
-	int song = data.ReadCell();
-	delete data;
 	
 	if (IsValidClient(client)) {
+		int song = data.ReadCell();
+		
 		decl String:songFancyName[MAX_FANCY_STRLEN];
 		GetSongMetadata(song, songFancyName, MAX_FANCY_STRLEN);
+		
 		PrintToChat(client, "%s Now playing: %s", RADIO_TAG, songFancyName);
 	}
+	
+	delete data;
 	
 	return Plugin_Stop;
 }
@@ -217,15 +222,8 @@ public Action Timer_NextSong(Handle timer)
 	int timeNow = GetTime();
 	
 	for (int client = 1; client <= MaxClients; ++client) {
-		if (IsValidClient(client) && RadioEnabled[client]) {
-			if (timeNow > SongEndEpoch[client]) {
-				Play(client);
-			}
-#if(0)
-			else {
-				PrintToChat(client, "%s Song playing; won't play next song yet...", RADIO_TAG);
-			}
-#endif
+		if (RadioEnabled[client] && timeNow > SongEndEpoch[client]) {
+			Play(client);
 		}
 	}
 	
@@ -278,7 +276,7 @@ public Action Cmd_RadioVolume(int client, int args)
 	
 	decl String:buffer[4];
 	if (GetCmdArg(1, buffer, sizeof(buffer)) < 1) {
-		ReplyToCommand(client, "%s Failed to parse volume. Usage: sm_radiovolume <value in range 0-100>", RADIO_TAG);
+		ReplyToCommand(client, "%s Failed to parse volume. Usage: sm_radiovol <value in range 0-100>", RADIO_TAG);
 		return Plugin_Handled;
 	}
 	
@@ -310,15 +308,15 @@ public Action Cmd_RadioSkip(int client, int args)
 public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast){
 	if (UseSdkPlayback.BoolValue) {
 		int timeNow = GetTime();
-		for(new i = 1; i <= MaxClients; i++) {
-			if(IsValidClient(i) && RadioEnabled[i]) {
-				Play(i, true, 1.0 * Max(0, SongEndEpoch[i] - timeNow));
+		for(int client = 1; client <= MaxClients; ++client) {
+			if(RadioEnabled[client]) {
+				Play(client, true, 1.0 * Max(0, SongEndEpoch[client] - timeNow));
 			}
 		}
 	} else {
-		for(new i = 1; i <= MaxClients; i++) {
-			if(IsValidClient(i) && RadioEnabled[i]) {
-				Play(i);
+		for(int client = 1; client <= MaxClients; ++client) {
+			if(RadioEnabled[client]) {
+				Play(client);
 			}
 		}
 	}
