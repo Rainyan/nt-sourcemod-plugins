@@ -12,6 +12,7 @@
 #define SONG_COUNT 15
 
 #define RADIO_TAG "[radio]"
+#define DEFAULT_RADIO_VOLUME 0.2
 
 #define MAX_FANCY_STRLEN 44 // longest string GetSongMetadata can reasonably produce + '\0'
 
@@ -123,7 +124,7 @@ void ResetState()
 		RadioEnabled[client] = false;
 		SongEndEpoch[client] = 0;
 		LastPlayedSong[client] = 0;
-		RadioVolume[client] = 1.0;
+		RadioVolume[client] = DEFAULT_RADIO_VOLUME;
 	}
 }
 
@@ -132,7 +133,7 @@ public void OnClientPutInServer(int client)
 	RadioEnabled[client] = false;
 	SongEndEpoch[client] = 0;
 	LastPlayedSong[client] = 0;
-	RadioVolume[client] = 1.0;
+	RadioVolume[client] = DEFAULT_RADIO_VOLUME;
 }
 
 public void OnClientDisconnect(int client)
@@ -140,7 +141,7 @@ public void OnClientDisconnect(int client)
 	RadioEnabled[client] = false;
 	SongEndEpoch[client] = 0;
 	LastPlayedSong[client] = 0;
-	RadioVolume[client] = 1.0;
+	RadioVolume[client] = DEFAULT_RADIO_VOLUME;
 }
 
 void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, bool verbose = true) {
