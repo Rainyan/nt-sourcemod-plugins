@@ -179,6 +179,7 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 			RadioVolume[client], _, _, _, _, _, playFromPosition);
 		
 		SongEndEpoch[client] = Max(0, GetSongEndEpoch(Song) - RoundToCeil(playFromPosition));
+		
 		LastPlayedSong[client] = Song;
 	} else {
 		ClientCommand(client, "play \"%s\"", Playlist[Song]);
@@ -219,11 +220,13 @@ public Action Timer_ShowSongDetails(Handle timer, DataPack data)
 
 public Action Timer_NextSong(Handle timer)
 {
-	int timeNow = GetTime();
-	
-	for (int client = 1; client <= MaxClients; ++client) {
-		if (RadioEnabled[client] && timeNow > SongEndEpoch[client]) {
-			Play(client);
+	if (UseSdkPlayback.BoolValue) {
+		int timeNow = GetTime();
+		
+		for (int client = 1; client <= MaxClients; ++client) {
+			if (RadioEnabled[client] && timeNow > SongEndEpoch[client]) {
+				Play(client);
+			}
 		}
 	}
 	
