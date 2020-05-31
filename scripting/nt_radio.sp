@@ -81,6 +81,8 @@ public void OnPluginStart()
 	ResetState();
 	
 	CreateTimer(5.0, Timer_NextSong, _, TIMER_REPEAT);
+	
+	AutoExecConfig(true);
 }
 
 public void OnMapChange()
