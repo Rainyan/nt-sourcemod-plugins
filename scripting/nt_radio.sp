@@ -3,7 +3,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION	"1.1.0_test"
+#define PLUGIN_VERSION	"1.1.1"
 
 // NT maxplayers is guaranteed smaller than engine max (64),
 // so we can allocate less memory by using this.
