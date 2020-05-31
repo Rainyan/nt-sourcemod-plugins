@@ -204,7 +204,7 @@ public Action Timer_ShowSongDetails(Handle timer, DataPack data)
 	data.Reset();
 	int client = GetClientOfUserId(data.ReadCell());
 	
-	if (IsValidClient(client)) {
+	if (IsValidClient(client) && RadioEnabled[client]) {
 		int song = data.ReadCell();
 		
 		decl String:songFancyName[MAX_FANCY_STRLEN];
