@@ -15,6 +15,7 @@
 #define DEFAULT_RADIO_VOLUME 0.2
 
 #define MAX_FANCY_STRLEN 44 // longest string GetSongMetadata can reasonably produce + '\0'
+#define SAMPLE_RATE_HZ 44100
 
 new const String:Playlist[SONG_COUNT][] = {
 	"../soundtrack/101 - annul.mp3",
@@ -35,21 +36,22 @@ new const String:Playlist[SONG_COUNT][] = {
 };
 
 bool RadioEnabled[NEO_MAXPLAYERS+1];
-int SongEndEpoch[NEO_MAXPLAYERS+1];
+float SongEndEpoch[NEO_MAXPLAYERS+1];
 int LastPlayedSong[NEO_MAXPLAYERS+1];
 bool SdkPlayPrepared = false;
 
 float RadioVolume[NEO_MAXPLAYERS+1];
 
 ConVar UseSdkPlayback = null;
+ConVar ShowDebug = null;
 
 public Plugin myinfo =
 {
-    name = "NEOTOKYO° Radio",
-    author = "Soft as HELL",
-    description = "Play original soundtrack in game",
-    version = PLUGIN_VERSION,
-    url = "https://github.com/softashell/nt-sourcemod-plugins"
+	name = "NEOTOKYO° Radio",
+	author = "Soft as HELL",
+	description = "Play original soundtrack in game",
+	version = PLUGIN_VERSION,
+	url = "https://github.com/softashell/nt-sourcemod-plugins"
 };
 
 public void OnPluginStart()
@@ -74,6 +76,9 @@ public void OnPluginStart()
 	UseSdkPlayback = CreateConVar("sm_radio_type", "1", "Whether to use the old console \"play ...\" style (value 0), or new SDK tools play style with volume control (value 1).", _, true, 0.0, true, 1.0);
 	HookConVarChange(UseSdkPlayback, PlayType_CvarChanged);
 	
+	ShowDebug = CreateConVar("sm_radio_debug", "0", "Whether to show debug info on playback.", _, true, 0.0, true, 1.0);
+	
+	
 	if (UseSdkPlayback.BoolValue) {
 		PrepareSdkPlaySounds();
 	}
@@ -85,7 +90,7 @@ public void OnPluginStart()
 	AutoExecConfig(true);
 }
 
-public void OnMapChange()
+public void OnMapStart()
 {
 	SdkPlayPrepared = false;
 	if (UseSdkPlayback.BoolValue) {
@@ -124,7 +129,7 @@ void ResetState()
 {
 	for (int client = 0; client < NEO_MAXPLAYERS; ++client) {
 		RadioEnabled[client] = false;
-		SongEndEpoch[client] = 0;
+		SongEndEpoch[client] = 0.0;
 		LastPlayedSong[client] = 0;
 		RadioVolume[client] = DEFAULT_RADIO_VOLUME;
 	}
@@ -133,7 +138,7 @@ void ResetState()
 public void OnClientPutInServer(int client)
 {
 	RadioEnabled[client] = false;
-	SongEndEpoch[client] = 0;
+	SongEndEpoch[client] = 0.0;
 	LastPlayedSong[client] = 0;
 	RadioVolume[client] = DEFAULT_RADIO_VOLUME;
 }
@@ -141,7 +146,7 @@ public void OnClientPutInServer(int client)
 public void OnClientDisconnect(int client)
 {
 	RadioEnabled[client] = false;
-	SongEndEpoch[client] = 0;
+	SongEndEpoch[client] = 0.0;
 	LastPlayedSong[client] = 0;
 	RadioVolume[client] = DEFAULT_RADIO_VOLUME;
 }
@@ -150,13 +155,24 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 {
 	if(!IsValidClient(client))
 		return;
+
+	// It's broken on the engine, just turn this always off for now...
+	playFromPosition = 0.0;
+	
+	float secs = playFromPosition / SAMPLE_RATE_HZ;
+	
+	PrintDebug(client, "Playing from pos: %.3f secs (%.3f samples). Playlast: %s",
+		playFromPosition / SAMPLE_RATE_HZ,
+		playFromPosition,
+		(playLastSong ? "yes" : "no"));
 	
 	if (verbose) {
 		if (!UseSdkPlayback.BoolValue || LastPlayedSong[client] == 0) {
-			PrintToChat(client, "%s You are now listening to NEOTOKYO° radio. Type !radio again to turn it off.", RADIO_TAG);
+			ReplyToCommand(client, "%s You are now listening to NEOTOKYO° radio. Type !radio again to turn it off.", RADIO_TAG);
 			
 			if (UseSdkPlayback.BoolValue) {
-				PrintToChat(client, "%s !radiovol 0-100 to change volume. !radioskip to skip a song.", RADIO_TAG);
+				ReplyToCommand(client, "%s !radiovol 0-100 to change volume. !radioskip to skip a song.",
+					RADIO_TAG);
 			}
 		}
 	}
@@ -164,11 +180,9 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 	int Song = GetRandomInt(0, SONG_COUNT-1);
 	
 	if (UseSdkPlayback.BoolValue) {
-		// Is a previous song still playing?
-		if (GetTime() < SongEndEpoch[client]) {
-			// Don't reset if we're looking to play the same song.
-			Stop(client, !playLastSong);
-		}
+		// Just in case, always stop any previous song.
+		// Don't reset last song if we're looking to play the same song.
+		Stop(client, !playLastSong);
 		
 		if (playLastSong) {
 			Song = LastPlayedSong[client];
@@ -177,10 +191,19 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 			Song = (Song + 1) % SONG_COUNT;
 		}
 		
-		EmitSoundToClient(client, Playlist[Song], _, _, _, _,
-			RadioVolume[client], _, _, _, _, _, playFromPosition);
+		EmitSoundToClient(client, Playlist[Song], _, _, _, _, RadioVolume[client],
+			_, _, _, _, _, secs);
 		
-		SongEndEpoch[client] = Max(0, GetSongEndEpoch(Song) - RoundToCeil(playFromPosition));
+		PrintDebug(client, "SECONDS: %f", secs);
+		
+		PrintDebug(client, "SongEndEpoch[client] pre = %.3f", SongEndEpoch[client]);
+		
+		SongEndEpoch[client] = FMax(0.0, GetSongEndEpoch(Song) - playFromPosition / SAMPLE_RATE_HZ);
+		
+		PrintDebug(client, "SongEndEpoch[client] post = %.3f", SongEndEpoch[client]);
+		PrintDebug(client, "GetSongEpoch: %.3f", GetSongEndEpoch(Song));
+		PrintDebug(client, "RoundToCeil(playFromPosition): %.3f",
+			RoundToCeil(playFromPosition / SAMPLE_RATE_HZ));
 		
 		LastPlayedSong[client] = Song;
 	} else {
@@ -197,7 +220,7 @@ void Play(int client, bool playLastSong = false, float playFromPosition = 0.0, b
 	}
 	
 	if (RadioVolume[client] == 0) {
-		PrintToChat(client, "%s Your radio is muted. Type !radiovol to change volume.", RADIO_TAG);
+		ReplyToCommand(client, "%s Your radio is muted. Type !radiovol to change volume.", RADIO_TAG);
 	}
 }
 
@@ -223,11 +246,19 @@ public Action Timer_ShowSongDetails(Handle timer, DataPack data)
 public Action Timer_NextSong(Handle timer)
 {
 	if (UseSdkPlayback.BoolValue) {
-		int timeNow = GetTime();
+		float timeNow = GetGameTime();
 		
 		for (int client = 1; client <= MaxClients; ++client) {
 			if (RadioEnabled[client] && timeNow > SongEndEpoch[client]) {
+				
+				if (IsValidClient(client)) {
+					PrintDebug(client, "Playing next song now! (epoch: %.3f > future: %.3f)", timeNow, SongEndEpoch[client]);
+				}
+
 				Play(client);
+			} else if (RadioEnabled[client]) {
+				PrintDebug(client, "delta time until next song: %.3f seconds (epoch %.3f vs future: %.3f)",
+					SongEndEpoch[client] - timeNow, timeNow, SongEndEpoch[client]);
 			}
 		}
 	}
@@ -238,12 +269,15 @@ public Action Timer_NextSong(Handle timer)
 void Stop(int client, bool resetLastPlayedSong = true) {
 	if (IsValidClient(client)) {
 		if (UseSdkPlayback.BoolValue) {
-			StopSound(client, SNDCHAN_AUTO, Playlist[LastPlayedSong[client]]);
-			SongEndEpoch[client] = 0;
+			for (int song = 0; song < SONG_COUNT; ++song) {
+				StopSound(client, SNDCHAN_AUTO, Playlist[song]);
+			}
 			
 			if (resetLastPlayedSong) {
 				LastPlayedSong[client] = 0;
 			}
+			
+			SongEndEpoch[client] = 0.0;
 		} else {
 			ClientCommand(client, "play common/null.wav");
 		}
@@ -256,7 +290,7 @@ public Action Cmd_Radio(int client, int args)
 		
 	if(RadioEnabled[client])
 	{
-		if (!UseSdkPlayback.BoolValue || GetTime() > SongEndEpoch[client]) {
+		if (!UseSdkPlayback.BoolValue || GetGameTime() > SongEndEpoch[client]) {
 			Play(client);
 		}
 	}
@@ -292,7 +326,13 @@ public Action Cmd_RadioVolume(int client, int args)
 	ReplyToCommand(client, "%s Your radio volume level is now %i\%.", RADIO_TAG, intVolume);
 	
 	if (RadioEnabled[client]) {
-		Play(client, true, 1.0 * Max(0, SongEndEpoch[client] - GetTime()), false);	
+		PrintDebug(client, "VOLUME SongEndE: %.3f minus GetGameTime %.3f == %.3f",
+			SongEndEpoch[client],
+			GetGameTime(),
+			SongEndEpoch[client] - GetGameTime());
+		
+		Stop(client, false);
+		Play(client, true, FMax(0.0, SongEndEpoch[client] - GetGameTime()), false);
 	}
 	
 	return Plugin_Handled;
@@ -312,10 +352,38 @@ public Action Cmd_RadioSkip(int client, int args)
 
 public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast){
 	if (UseSdkPlayback.BoolValue) {
-		int timeNow = GetTime();
+		float timeNow = GetGameTime();
 		for(int client = 1; client <= MaxClients; ++client) {
 			if(RadioEnabled[client]) {
-				Play(client, true, 1.0 * Max(0, SongEndEpoch[client] - timeNow));
+				
+				float songEndDelta = SongEndEpoch[client] - timeNow;
+				float songLength = GetSongLength(LastPlayedSong[client]);
+				// Magic number hack since it seems we undershoot slightly for some reason.
+				float futureSeek = 0.0;
+				float resumePoint = FMax(0.0, (songLength - songEndDelta + futureSeek) * SAMPLE_RATE_HZ);
+				// Don't seek past the song end point.
+				resumePoint = FMin(resumePoint, (songLength) * SAMPLE_RATE_HZ);
+				
+				PrintDebug(client, "RoundStart SongEndE: %.3f minus timeNow %.3f - 1 == %.3f, and song(%i) length %.3f - that is %.3f",
+					SongEndEpoch[client],
+					timeNow,
+					SongEndEpoch[client] - timeNow - 1,
+					
+					LastPlayedSong[client],
+					GetSongLength(LastPlayedSong[client]),
+					GetSongLength(LastPlayedSong[client]) - SongEndEpoch[client] - timeNow - 1);
+				
+				PrintDebug(client, "songEndDelta: %.3f, songLength: %.3f", songEndDelta, songLength);
+				PrintDebug(client, "songLength - songEndDelta == %.3f", songLength - songEndDelta);
+				
+				//int playFrom = GetSongLength(LastPlayedSong[client]) - SongEndEpoch[client] - timeNow - 1;
+				
+				PrintDebug(client, "RESUME POINT: %.3f secs (%.3f samples) of %.3f secs (%.3f samples) total",
+					resumePoint / SAMPLE_RATE_HZ,
+					resumePoint,
+					songLength,
+					songLength * SAMPLE_RATE_HZ);
+				Play(client, true, resumePoint);
 			}
 		}
 	} else {
@@ -345,31 +413,45 @@ bool IsValidClient(client){
 	return true;
 }
 
-int GetSongEndEpoch(int songIndex)
+float GetSongLength(int songIndex)
 {
 	if (songIndex < 0 || songIndex >= SONG_COUNT)
 		ThrowError("Invalid song index %i", songIndex);
 	
-	// Minutes, seconds, and 1 extra second to make sure the songs have time to fully finish.
-	int songLengthsInSeconds[SONG_COUNT] = {
-		(6 * 60 + 34 + 1),	// 101 - annul.mp3
-		(8 * 60 + 13 + 1),	// 102 - tinsoldiers.mp3
-		(6 * 60 + 50 + 1),	// 103 - beacon.mp3
-		(4 * 60 + 48 + 1),	// 104 - imbrium.mp3
-		(6 * 60 + 02 + 1),	// 105 - automata.mp3
-		(5 * 60 + 46 + 1),	// 106 - hiroden 651.mp3
-		(5 * 60 + 56 + 1),	// 109 - mechanism.mp3
-		(5 * 60 + 53 + 1),	// 110 - paperhouse.mp3
-		(6 * 60 + 04 + 1),	// 111 - footprint.mp3
-		(8 * 60 + 17 + 1),	// 112 - out.mp3
-		(5 * 60 + 41 + 1),	// 202 - scrap.mp3
-		(5 * 60 + 17 + 1),	// 207 - carapace.mp3
-		(6 * 60 + 12 + 1),	// 208 - stopgap.mp3
-		(3 * 60 + 56 + 1),	// 209 - radius.mp3
-		(5 * 60 + 11 + 1)	// 210 - rebuild.mp3
+	// Exact song lengths up to 3 decimal points.
+	// Need the accuracy because Source audio seek wants an exact
+	// sample location, ie. length in seconds * sample rate.
+	float songLengthsInSeconds[SONG_COUNT] = {
+		394.055, // 101 - annul.mp3
+		493.006, // 102 - tinsoldiers.mp3
+		410.162, // 103 - beacon.mp3
+		288.627, // 104 - imbrium.mp3
+		362.252, // 105 - automata.mp3
+		346.577, // 106 - hiroden 651.mp3
+		356.572, // 109 - mechanism.mp3
+		353.693, // 110 - paperhouse.mp3
+		364.796, // 111 - footprint.mp3
+		497.754, // 112 - out.mp3
+		340.984, // 202 - scrap.mp3
+		317.362, // 207 - carapace.mp3
+		372.961, // 208 - stopgap.mp3
+		236.413, // 209 - radius.mp3
+		311.425, // 210 - rebuild.mp3
 	};
 	
-	return GetTime() + songLengthsInSeconds[songIndex];
+	PrintToServer("Song at index %i is %.3f seconds", songIndex, songLengthsInSeconds[songIndex]);
+	
+	return songLengthsInSeconds[songIndex];
+}
+
+float GetSongEndEpoch(int songIndex)
+{
+	float time = GetGameTime();
+	float len = GetSongLength(songIndex);
+	
+	PrintToServer("Returning time %.3f + len %.3f == %.3f", time, len, time + len);
+	
+	return time + len;
 }
 
 void GetSongMetadata(int songIndex, char[] outString, int outSize)
@@ -405,6 +487,22 @@ void GetSongMetadata(int songIndex, char[] outString, int outSize)
 	}
 }
 
+float FMin(float v1, float v2)
+{
+	if (v1 < v2)
+		return v1;
+	else
+		return v2;
+}
+
+float FMax(float v1, float v2)
+{
+	if (v1 > v2)
+		return v1;
+	else
+		return v2;
+}
+
 int Min(int v1, int v2)
 {
 	if (v1 < v2)
@@ -419,4 +517,20 @@ int Max(int v1, int v2)
 		return v1;
 	else
 		return v2;
+}
+
+void PrintDebug(int caller, const char[] msg, any ...)
+{
+	if (!ShowDebug.BoolValue) {
+		return;
+	}
+	decl String:buffer[1024];
+	int bytes = VFormat(buffer, sizeof(buffer), msg, 3);
+	if (bytes <= 0) {
+		ThrowError("VFormat failed on: %s", msg);
+	}
+	
+	PrintToServer(buffer);
+	PrintToChat(caller, buffer);
+	PrintToConsole(caller, buffer);
 }
