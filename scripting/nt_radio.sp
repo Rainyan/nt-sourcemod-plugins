@@ -309,7 +309,7 @@ public Action Cmd_RadioVolume(int client, int args)
 	}
 	
 	if (args != 1) {
-		ReplyToCommand(client, "%s Usage: sm_radiovol <value in range 0-100>", RADIO_TAG);
+		ReplyToCommand(client, "%s Your volume level is %i%c. Usage: sm_radiovol <value in range 0-100>", RADIO_TAG, RoundToNearest(RadioVolume[client] * 100), '%');
 		return Plugin_Handled;
 	}
 	
@@ -323,7 +323,7 @@ public Action Cmd_RadioVolume(int client, int args)
 	int intVolume = Min(100, Max(0, StringToInt(buffer)));
 	RadioVolume[client] = intVolume / 100.0;
 	
-	ReplyToCommand(client, "%s Your radio volume level is now %i\%.", RADIO_TAG, intVolume);
+	ReplyToCommand(client, "%s Your radio volume level is now %i%c.", RADIO_TAG, intVolume, '%');
 	
 	if (RadioEnabled[client]) {
 		PrintDebug(client, "VOLUME SongEndE: %.3f minus GetGameTime %.3f == %.3f",
