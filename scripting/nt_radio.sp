@@ -383,7 +383,7 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
 					resumePoint,
 					songLength,
 					songLength * SAMPLE_RATE_HZ);
-				Play(client, true, resumePoint);
+				Play(client, false, resumePoint);
 			}
 		}
 	} else {
