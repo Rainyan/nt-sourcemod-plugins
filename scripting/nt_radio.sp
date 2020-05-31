@@ -76,7 +76,7 @@ public void OnPluginStart()
 	UseSdkPlayback = CreateConVar("sm_radio_type", "1", "Whether to use the old console \"play ...\" style (value 0), or new SDK tools play style with volume control (value 1).", _, true, 0.0, true, 1.0);
 	HookConVarChange(UseSdkPlayback, PlayType_CvarChanged);
 	
-	ShowDebug = CreateConVar("sm_radio_debug", "0", "Whether to show debug info on playback.", _, true, 0.0, true, 1.0);
+	ShowDebug = CreateConVar("sm_radio_debug", "0", "Whether to show debug info on playback. Recommended off for public servers to avoid chat spam.", _, true, 0.0, true, 1.0);
 	
 	
 	if (UseSdkPlayback.BoolValue) {
