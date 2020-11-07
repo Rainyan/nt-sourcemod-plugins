@@ -5,6 +5,8 @@
 #pragma semicolon 1
 #pragma newdecls required
 
+#define PLUGIN_VERSION "0.7.5"
+
 #define DEBUG 0
 #define SF_NORESPAWN (1 << 30)
 #define EF_NODRAW 32
@@ -17,8 +19,8 @@ public Plugin myinfo =
 	name = "NEOTOKYO° Weapon Drop Tweaks",
 	author = "soft as HELL",
 	description = "Drops weapon with ammo and disables ammo pickup",
-	version = "0.7.5",
-	url = ""
+	version = PLUGIN_VERSION,
+	url = "https://github.com/softashell/nt-sourcemod-plugins"
 }
 
 char weapon_blacklist[][] = {
@@ -33,6 +35,8 @@ float g_fLastWeaponUse[MAXPLAYERS+1], g_fLastWeaponSwap[MAXPLAYERS+1];
 
 public void OnPluginStart()
 {
+	CreateConVar("sm_nt_drop_version", PLUGIN_VERSION, "NEOTOKYO° Weapon Drop Tweaks plugin version", FCVAR_DONTRECORD);
+
 	HookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
 
 	// Hook again if plugin is restarted
