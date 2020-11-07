@@ -43,7 +43,9 @@ public void OnPluginStart()
 {
 	CreateConVar("sm_nt_drop_version", PLUGIN_VERSION, "NEOTOKYO° Weapon Drop Tweaks plugin version", FCVAR_DONTRECORD);
 
+	#if DEBUG > 0
 	HookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
+	#endif
 
 	// Hook again if plugin is restarted
 	for(int client = 1; client <= MaxClients; client++)
@@ -75,17 +77,19 @@ public void OnClientPutInServer(int client)
 	g_fLastWeaponSwap[client] = 0.0;
 }
 
+#if DEBUG > 0
 public Action OnPlayerDeath(Handle event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(GetEventInt(event, "userid"));
 
-	if(!IsValidClient(client))
-		return;
+	if(IsValidClient(client))
+	{
+		PrintToServer("[nt_drop] Client %d dropping all weapons on death", client);
+	}
 
-	#if DEBUG > 0
-	PrintToServer("[nt_drop] %N (%d) dropping all weapons on death", client, client);
-	#endif
+	return Plugin_Continue;
 }
+#endif
 
 public Action OnWeaponTouch(int weapon, int client)
 {
@@ -206,7 +210,7 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 
 		// If we found an entity - make sure its valid
 		if(!IsValidEdict(weapon))
-			return;
+			return Plugin_Continue;
 
 		float eye_pos[3], wep_pos[3], distance;
 		GetClientEyePosition(client, eye_pos);
@@ -214,18 +218,18 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 		distance = GetVectorDistance(eye_pos, wep_pos);
 
 		if(distance >= 100.0) // Around the same distance as ghost pickup
-			return; // Too far away
+			return Plugin_Continue; // Too far away
 
 		char classname[NEO_MAX_WEPNAME];
 		if(!GetEntityClassname(weapon, classname, sizeof(classname)))
-			return; // Can't get class name
+			return Plugin_Continue; // Can't get class name
 
 		int slot = GetWeaponSlot(weapon);
 
 		if((slot == SLOT_PRIMARY) || (slot == SLOT_SECONDARY))
 		{
 			if(GetGameTime() - g_fLastWeaponUse[client] < 1.0)
-				return; // Spamming use
+				return Plugin_Continue; // Spamming use
 
 			int fEffects = GetEntProp(weapon, Prop_Data, "m_fEffects");
 			if(fEffects & EF_NODRAW)
@@ -242,7 +246,7 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 				// Release use so the ghost gets picked up
 				buttons &= ~IN_USE;
 
-				return;
+				return Plugin_Continue;
 			}
 
 			int currentweapon = GetPlayerWeaponSlot(client, slot);
@@ -275,6 +279,8 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 			g_fLastWeaponUse[client] = GetGameTime();
 		}
 	}
+
+	return Plugin_Continue;
 }
 
 public Action TakeWeapon(Handle timer, DataPack pack)
@@ -289,7 +295,7 @@ public Action TakeWeapon(Handle timer, DataPack pack)
 	#endif
 
 	if(!IsValidEdict(weapon))
-		return;
+		return Plugin_Stop;
 
 	int slot = GetWeaponSlot(weapon);
 	int currentweapon = GetPlayerWeaponSlot(client, slot);
@@ -300,22 +306,24 @@ public Action TakeWeapon(Handle timer, DataPack pack)
 		PrintToChatAll("[TakeWeapon] %d can't equip %d because we picked up %d already", client, weapon, currentweapon);
 		#endif
 
-		return;
-	} else {
-		// Equip weapon
-		EquipPlayerWeapon(client, weapon);
-
-		// Switch to active weapon
-		SetEntPropEnt(client, Prop_Data, "m_hActiveWeapon", weapon);
-		ChangeEdictState(client, FindDataMapInfo(client, "m_hActiveWeapon"));
+		return Plugin_Stop;
 	}
+
+	// Equip weapon
+	EquipPlayerWeapon(client, weapon);
+
+	// Switch to active weapon
+	SetEntPropEnt(client, Prop_Data, "m_hActiveWeapon", weapon);
+	ChangeEdictState(client, FindDataMapInfo(client, "m_hActiveWeapon"));
+
+	return Plugin_Stop;
 }
 #endif
 
 public Action ChangeSpawnFlags(Handle timer, int weapon)
 {
 	if(!IsValidEdict(weapon))
-		return;
+		return Plugin_Stop;
 
 	// Prepare spawnflags datamap offset
 	static int spawnflags;
@@ -328,6 +336,8 @@ public Action ChangeSpawnFlags(Handle timer, int weapon)
 
 	// Remove SF_NORESPAWN flag from m_spawnflags datamap
 	SetEntData(weapon, spawnflags, GetEntData(weapon, spawnflags) & ~SF_NORESPAWN);
+
+	return Plugin_Stop;
 }
 
 bool IsWeaponDroppable(const char[] classname)
@@ -382,6 +392,8 @@ public Action WipeDeadWeapons(Handle timer)
 	#if DEBUG > 0
 	PrintToServer("Removed %d dead weapons", removed);
 	#endif
+
+	return Plugin_Continue;
 }
 
 #if DEBUG > 0
