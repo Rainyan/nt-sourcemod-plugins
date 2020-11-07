@@ -285,8 +285,6 @@ public Action TakeWeapon(Handle timer, DataPack pack)
 	int client = pack.ReadCell();
 	int weapon = pack.ReadCell();
 
-	pack.Close();
-
 	#if DEBUG > 0
 	PrintToChatAll("[TakeWeapon] %d %d", client, weapon);
 	#endif
