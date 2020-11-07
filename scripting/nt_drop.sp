@@ -233,7 +233,7 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 
 			int fEffects = GetEntProp(weapon, Prop_Data, "m_fEffects");
 			if(fEffects & EF_NODRAW)
-				return; // Not drawn to clients, probably weapon respawn point
+				return Plugin_Continue; // Not drawn to clients, probably weapon respawn point
 
 			#if DEBUG > 0
 			PrintToChat(client, "use %s - id: %d, slot: %d, distance: %.1f", classname, weapon, slot, distance);
