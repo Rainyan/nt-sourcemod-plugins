@@ -208,11 +208,10 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 		if(!IsValidEdict(weapon))
 			return;
 
-		// Retrieve the client's eye position and entity origin vector to compare distance
-		float vec1[3], vec2[3], distance;
-		GetClientEyePosition(client, vec1);
-		GetEntPropVector(weapon, Prop_Send, "m_vecOrigin", vec2);
-		distance = GetVectorDistance(vec1, vec2);
+		float eye_pos[3], wep_pos[3], distance;
+		GetClientEyePosition(client, eye_pos);
+		GetEntPropVector(weapon, Prop_Send, "m_vecOrigin", wep_pos);
+		distance = GetVectorDistance(eye_pos, wep_pos);
 
 		if(distance >= 100.0) // Around the same distance as ghost pickup
 			return; // Too far away
