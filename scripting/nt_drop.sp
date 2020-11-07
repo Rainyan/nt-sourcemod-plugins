@@ -17,6 +17,9 @@
 
 #define NEO_MAXPLAYERS 32
 
+// "weapon_smokegrenade\0"
+#define NEO_MAX_WEPNAME (19+1)
+
 public Plugin myinfo =
 {
 	name = "NEOTOKYO° Weapon Drop Tweaks",
@@ -92,7 +95,7 @@ public Action OnWeaponTouch(int weapon, int client)
 	if(GetGameTime() - g_fLastWeaponSwap[client] < 0.5)
 		return Plugin_Handled; // Currently swapping weapons with +use, block touch
 
-	char classname[32];
+	char classname[NEO_MAX_WEPNAME];
 	if(!GetEntityClassname(weapon, classname, sizeof(classname)))
 		return Plugin_Continue; // Can't get class name
 
@@ -102,7 +105,7 @@ public Action OnWeaponTouch(int weapon, int client)
 
 	if(IsValidEdict(currentweapon))
 	{
-		char classname2[32];
+		char classname2[NEO_MAX_WEPNAME];
 		if(GetEntityClassname(currentweapon, classname2, 32) && StrEqual(classname, classname2))
 		{
 			#if DEBUG > 2
@@ -121,7 +124,7 @@ public void OnWeaponEquip(int client, int weapon)
 	if(!IsValidEdict(weapon) || !IsPlayerAlive(client))
 		return;
 
-	char classname[32];
+	char classname[NEO_MAX_WEPNAME];
 	if(!GetEntityClassname(weapon, classname, sizeof(classname)))
 		return; // Can't get class name
 
@@ -152,7 +155,7 @@ public void OnWeaponDrop(int client, int weapon)
 	if(!IsValidEdict(weapon))
 		return;
 
-	char classname[32];
+	char classname[NEO_MAX_WEPNAME];
 	if(!GetEntityClassname(weapon, classname, sizeof(classname)))
 		return; // Can't get class name
 
@@ -214,7 +217,7 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 		if(distance >= 100.0) // Around the same distance as ghost pickup
 			return; // Too far away
 
-		char classname[30];
+		char classname[NEO_MAX_WEPNAME];
 		if(!GetEntityClassname(weapon, classname, sizeof(classname)))
 			return; // Can't get class name
 
@@ -349,7 +352,7 @@ public Action WipeDeadWeapons(Handle timer)
 	int removed;
 	#endif
 
-	char classname[64];
+	char classname[NEO_MAX_WEPNAME];
 
 	for (int i = MAXPLAYERS+1; i < 2048; i++)
 	{
