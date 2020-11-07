@@ -14,6 +14,8 @@
 // set to true if you want to enable taking weapons with +use (f by default)
 #define ENABLE_USE false
 
+#define NEO_MAXPLAYERS 32
+
 public Plugin myinfo =
 {
 	name = "NEOTOKYO° Weapon Drop Tweaks",
@@ -31,7 +33,7 @@ char weapon_blacklist[][] = {
 	"weapon_ghost"
 };
 
-float g_fLastWeaponUse[MAXPLAYERS+1], g_fLastWeaponSwap[MAXPLAYERS+1];
+float g_fLastWeaponUse[NEO_MAXPLAYERS+1], g_fLastWeaponSwap[NEO_MAXPLAYERS+1];
 
 public void OnPluginStart()
 {
