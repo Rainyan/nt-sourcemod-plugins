@@ -11,7 +11,7 @@
 #define MAXCAPZONES 4
 #define INACCURACY 0.35
 
-#define PLUGIN_VERSION	"1.7.0"
+#define PLUGIN_VERSION	"1.7.1"
 
 public Plugin myinfo =
 {
@@ -196,7 +196,7 @@ public Action CheckGhostPosition(Handle timer)
 
 	for(capzone = 0; capzone <= totalCapzones; capzone++)
 	{
-		if(!IsValidEdict(capzones[capzone]) || (capRadius[capzone] <= 0))
+		if(capzones[capzone] == 0 || !IsValidEdict(capzones[capzone]) || (capRadius[capzone] <= 0))
 			continue; // Doesn't exist or no radius
 
 		distance = GetVectorDistance(ghostVector, capzoneVector[capzone]);
