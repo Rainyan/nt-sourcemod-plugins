@@ -4,21 +4,26 @@
 #pragma semicolon 1
 #pragma newdecls required
 
+#define MAX_STEAMID_LEN 30
+
+#define NEO_MAX_PLAYERS 32
+
 public Plugin myinfo =
 {
-    name = "NEOTOKYO° Temporary score saver",
-    author = "soft as HELL",
-    description = "Saves score when player disconnects and restores it if player connects back before map change",
-    version = "0.5",
-    url = "https://github.com/softashell/nt-sourcemod-plugins"
+	name = "NEOTOKYO° Temporary score saver",
+	author = "soft as HELL",
+	description = "Saves score when player disconnects and restores it if player connects back before map change",
+	version = "0.6",
+	url = "https://github.com/softashell/nt-sourcemod-plugins"
 };
 
-Handle hDB, hRestartGame, hResetScoresTimer, hScoreDatabase;
-bool bScoreLoaded[MAXPLAYERS+1],bResetScores, g_bHasJoinedATeam[MAXPLAYERS+1];
+Database hDB = null;
+Handle hRestartGame, hResetScoresTimer, hScoreDatabase;
+bool bScoreLoaded[NEO_MAX_PLAYERS+1],bResetScores, g_bHasJoinedATeam[NEO_MAX_PLAYERS+1];
 
 public void OnPluginStart()
 {
-	hScoreDatabase = CreateConVar("nt_savescore_database", "nt_savescores", "Database filename for saving scores", FCVAR_PROTECTED);
+	hScoreDatabase = CreateConVar("nt_savescore_database_config", "storage-local", "Database config used for saving scores", FCVAR_PROTECTED);
 
 	hRestartGame = FindConVar("neo_restart_this");
 
@@ -117,102 +122,124 @@ public Action event_RoundStart(Handle event, const char[] name, bool dontBroadca
 
 void DB_init()
 {
-	char error[255], buffer[50];
-	
-	GetConVarString(hScoreDatabase, buffer, sizeof(buffer));
+	if (hDB != null)
+		return;
 
-	hDB = SQLite_UseDatabase(buffer, error, sizeof(error));
+	char score_database_filename[PLATFORM_MAX_PATH];
+	GetConVarString(hScoreDatabase, score_database_filename, sizeof(score_database_filename));
 
-	if(hDB == INVALID_HANDLE)
-		SetFailState("SQL error: %s", error);
+	Database.Connect(Cb_GotDatabase, score_database_filename);
+}
 
-	SQL_LockDatabase(hDB);
+public void Cb_GotDatabase(Database db, const char[] error, any data)
+{
+	if (db == null)
+		SetFailState("Database connection error: %s", error);
 
-	SQL_FastQuery(hDB, "VACUUM");
-	SQL_FastQuery(hDB, "CREATE TABLE IF NOT EXISTS nt_saved_score (steamID TEXT PRIMARY KEY, xp SMALLINT, deaths SMALLINT);");
+	hDB = db;
 
-	SQL_UnlockDatabase(hDB);
+	hDB.Query(DBCb_fireAndForget, "CREATE TABLE IF NOT EXISTS nt_saved_score (steamID TEXT PRIMARY KEY, xp SMALLINT, deaths SMALLINT);");
 }
 
 void DB_clear()
 {
-	SQL_LockDatabase(hDB);
-
-	SQL_FastQuery(hDB, "DELETE FROM nt_saved_score;");
-
-	SQL_UnlockDatabase(hDB);
+	if (hDB != null)
+		hDB.Query(DBCb_fireAndForget, "DELETE FROM nt_saved_score;");
 }
 
 void DB_insertScore(int client)
 {
+	if (hDB == null)
+		return;
+
 	if(!IsValidClient(client))
 		return;
 
-	char steamID[30], query[200];
+	char steamID[MAX_STEAMID_LEN], query[64 + MAX_STEAMID_LEN];
 	int xp, deaths;
 
 	GetClientAuthId(client, AuthId_SteamID64, steamID, sizeof(steamID));
+	// Avoid injection in the off chance the client has spoofed their SteamID (hacked client, etc.)
+	hDB.Escape(steamID, steamID, sizeof(steamID));
 
 	xp = GetPlayerXP(client);
 	deaths = GetPlayerDeaths(client);
 
 	Format(query, sizeof(query), "INSERT OR REPLACE INTO nt_saved_score VALUES ('%s', %d, %d);", steamID, xp, deaths);
 
-	SQL_FastQuery(hDB, query);
+	hDB.Query(DBCb_fireAndForget, query);
 }
 
 void DB_deleteScore(int client)
 {
+	if (hDB == null)
+		return;
+
 	if(!IsValidClient(client))
 		return;
 
-	char steamID[30], query[200];
+	char steamID[MAX_STEAMID_LEN], query[47 + MAX_STEAMID_LEN];
 
 	GetClientAuthId(client, AuthId_SteamID64, steamID, sizeof(steamID));
+	// Avoid injection in the off chance the client has spoofed their SteamID (hacked client, etc.)
+	hDB.Escape(steamID, steamID, sizeof(steamID));
 
 	Format(query, sizeof(query), "DELETE FROM nt_saved_score WHERE steamID = '%s';", steamID);
 
-	SQL_FastQuery(hDB, query);
+	hDB.Query(DBCb_fireAndForget, query);
 }
 
 void DB_retrieveScore(int client)
 {
+	if (hDB == null)
+		return;
+
 	if(!IsValidClient(client))
 		return;
 
 	bScoreLoaded[client] = true; // At least we tried!
 
-	char steamID[30], query[200];
+	char steamID[MAX_STEAMID_LEN], query[49 + MAX_STEAMID_LEN];
 
 	GetClientAuthId(client, AuthId_SteamID64, steamID, sizeof(steamID));
+	// Avoid injection in the off chance the client has spoofed their SteamID (hacked client, etc.)
+	hDB.Escape(steamID, steamID, sizeof(steamID));
 
-	Format(query, sizeof(query), "SELECT * FROM	nt_saved_score WHERE steamID = '%s';", steamID);
+	Format(query, sizeof(query), "SELECT * FROM nt_saved_score WHERE steamID = '%s';", steamID);
 
-	SQL_TQuery(hDB, DB_retrieveScoreCallback, query, client);
+	hDB.Query(DBCb_retrieveScoreCallback, query, GetClientUserId(client));
 }
 
-public void DB_retrieveScoreCallback(Handle owner, Handle hndl, const char[] error, int client)
+// Empty callback for when you don't care about the result, but still want to use a threaded query.
+// Good replacement for the synchronous SQL_FastQuery when it could negatively affect server performance,
+// for example during slow I/O.
+public void DBCb_fireAndForget(Database db, DBResultSet results, const char[] error, any data)
 {
-	if (hndl == INVALID_HANDLE)
+}
+
+public void DBCb_retrieveScoreCallback(Database db, DBResultSet results, const char[] error, int userid)
+{
+	if (results == null)
 	{
 		LogError("SQL Error: %s", error);
 		return;
 	}
 
-	if(!IsValidClient(client))
+	int client = GetClientOfUserId(userid);
+
+	if(client == 0)
 		return;
 
-	if (SQL_GetRowCount(hndl) == 0)
+	if (results.RowCount == 0)
 		return;
 
-	int xp = SQL_FetchInt(hndl, 1);
-	int deaths = SQL_FetchInt(hndl, 2);
+	int xp = results.FetchInt(1);
+	int deaths = results.FetchInt(2);
 
 	if(xp != 0 || deaths != 0)
 	{
 		SetPlayerXP(client, xp);
 		SetPlayerDeaths(client, deaths);
-		UpdatePlayerRank(client);
 	}
 
 	PrintToChat(client, "[NT°] Saved score restored!");
