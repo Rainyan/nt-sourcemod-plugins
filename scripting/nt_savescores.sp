@@ -13,7 +13,7 @@ public Plugin myinfo =
 	name = "NEOTOKYO° Temporary score saver",
 	author = "soft as HELL",
 	description = "Saves score when player disconnects and restores it if player connects back before map change",
-	version = "0.6",
+	version = "0.6.1",
 	url = "https://github.com/softashell/nt-sourcemod-plugins"
 };
 
@@ -240,10 +240,10 @@ public void DBCb_retrieveScoreCallback(Database db, DBResultSet results, const c
 	{
 		SetPlayerXP(client, xp);
 		SetPlayerDeaths(client, deaths);
-	}
 
-	PrintToChat(client, "[NT°] Saved score restored!");
-	PrintToConsole(client, "[NT°] Saved score restored! XP: %d Deaths: %d", xp, deaths);
+		PrintToChat(client, "[NT°] Saved score restored!");
+		PrintToConsole(client, "[NT°] Saved score restored! XP: %d Deaths: %d", xp, deaths);
+	}
 
 	// Remove score from DB after it has been loaded
 	DB_deleteScore(client);
